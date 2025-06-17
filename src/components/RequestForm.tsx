@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +13,7 @@ import QRCodeModal from './QRCodeModal';
 import { useToast } from '@/hooks/use-toast';
 import { requestTypes } from '@/constants/formData';
 import { FormData } from '@/types/form';
+import { supabase } from '@/integrations/supabase/client';
 
 const RequestForm = () => {
   const { toast } = useToast();
@@ -30,6 +30,7 @@ const RequestForm = () => {
   });
   const [showQRModal, setShowQRModal] = useState(false);
   const [generatedTicketNumber, setGeneratedTicketNumber] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getIconComponent = (iconName: string) => {
     const iconProps = { className: "w-6 h-6 text-white" };
@@ -54,7 +55,7 @@ const RequestForm = () => {
     return `TPM-${dateString}-${randomNumber}`;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!selectedType || !formData.name || !selectedDepartment) {
@@ -66,20 +67,72 @@ const RequestForm = () => {
       return;
     }
 
-    // Generate ticket number
-    const ticketNumber = generateTicketNumber();
-    setGeneratedTicketNumber(ticketNumber);
-    
-    // Show QR modal
-    setShowQRModal(true);
+    setIsSubmitting(true);
 
-    // Reset form
-    setSelectedType('');
-    setSelectedDepartment('');
-    setSelectedLineArea('');
-    setSelectedPriority('');
-    setUploadedFiles([]);
-    setFormData({ name: '', contact: '', title: '', description: '' });
+    try {
+      // Generate ticket number
+      const ticketNumber = generateTicketNumber();
+      
+      // Get department and area IDs
+      const { data: departments } = await supabase
+        .from('departments')
+        .select('id')
+        .eq('name', selectedDepartment)
+        .single();
+
+      let areaId = null;
+      if (selectedLineArea) {
+        const { data: areas } = await supabase
+          .from('areas')
+          .select('id')
+          .eq('name', selectedLineArea)
+          .single();
+        areaId = areas?.id;
+      }
+
+      // Create ticket in database
+      const { error } = await supabase
+        .from('tickets')
+        .insert({
+          id: ticketNumber,
+          title: formData.title || `${selectedType} - ${formData.name}`,
+          description: formData.description,
+          requester_name: formData.name,
+          requester_phone: formData.contact,
+          department_id: departments?.id,
+          area_id: areaId,
+          priority: selectedPriority || 'Medium',
+          status: 'Open'
+        });
+
+      if (error) throw error;
+
+      setGeneratedTicketNumber(ticketNumber);
+      setShowQRModal(true);
+
+      // Reset form
+      setSelectedType('');
+      setSelectedDepartment('');
+      setSelectedLineArea('');
+      setSelectedPriority('');
+      setUploadedFiles([]);
+      setFormData({ name: '', contact: '', title: '', description: '' });
+
+      toast({
+        title: "Berhasil!",
+        description: `Tiket ${ticketNumber} berhasil dibuat.`,
+      });
+
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      toast({
+        title: "Error",
+        description: "Gagal membuat tiket. Silakan coba lagi.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -164,8 +217,12 @@ const RequestForm = () => {
 
           {/* Submit Button */}
           <div className="flex justify-center pt-4">
-            <Button type="submit" className="btn-primary text-base px-8 py-3">
-              Ajukan Permintaan Tiket Job TPM
+            <Button 
+              type="submit" 
+              className="btn-primary text-base px-8 py-3"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Memproses...' : 'Ajukan Permintaan Tiket Job TPM'}
             </Button>
           </div>
         </form>
