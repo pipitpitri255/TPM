@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import SearchSection from './tracking/SearchSection';
@@ -27,7 +26,14 @@ const TrackingForm = () => {
   }, []);
 
   const handleSearchWithQuery = async (query: string) => {
-    if (!query.trim()) return;
+    if (!query.trim()) {
+      toast({
+        title: "Input kosong",
+        description: "Masukkan nomor tiket atau kata kunci pencarian.",
+        variant: "destructive"
+      });
+      return;
+    }
     
     setIsSearching(true);
     console.log('Searching for ticket:', query);
@@ -42,7 +48,7 @@ const TrackingForm = () => {
           areas(name),
           technicians(name)
         `)
-        .or(`id.ilike.%${query}%,title.ilike.%${query}%`)
+        .or(`id.ilike.%${query}%,title.ilike.%${query}%,description.ilike.%${query}%`)
         .limit(1)
         .maybeSingle();
 
@@ -89,7 +95,10 @@ const TrackingForm = () => {
   };
 
   const handleQRScan = () => {
-    alert('Fitur QR Scanner akan segera tersedia!');
+    toast({
+      title: "QR Scanner",
+      description: "Fitur QR Scanner akan segera tersedia!",
+    });
   };
 
   const handleViewDetail = () => {
